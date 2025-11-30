@@ -1,39 +1,32 @@
-# Python
 """
-Dieses Skript lädt historische **Daily**-Bar-Daten für **Tesla (TSLA)** über die Alpaca Market Data API,
-berechnet ein Ziel-Label (Up/Down für den nächsten Handelstag) sowie einfache technische Indikatoren
-(SMA, EMA, RSI, %Change), und speichert getrennt **Rohdaten** und **Feature-Daten**.
+Dieses Skript lädt historische **30-Minuten-Bar-Daten** für mehrere Aktien (z. B. Tesla, Ford, GM)
+über die Alpaca Market Data API. Für jede Aktie werden Rohdaten und einfache Feature-Daten
+inkl. Zielvariable (Up/Down für die nächste 30-Minuten-Periode) erzeugt und gespeichert.
 
-Problemfrage:
-- Binary Classification: Steigt der Schlusskurs morgen? target=1 wenn Close[t+1] > Close[t], sonst 0.
+Zielvariable:
+    target = 1, wenn close[t+1] > close[t], sonst 0
 
 Inputs:
-- YAML-Configs:
-    ../../conf/keys.yaml        (API Keys)
-    ../../conf/params.yaml      (Datenpfad, Datumsspanne, Symbol)
-- (optional) Verzeichnis-Struktur wird bei Bedarf angelegt
+    ../../conf/keys.yaml   -> API Keys
+    ../../conf/params.yaml -> Datenpfad, Zeitraum, Symbol-Liste
 
-Outputs:
-- <DATA_PATH>/raw/tsla_daily.parquet        (Rohdaten: OHLCV)
-- <DATA_PATH>/raw/tsla_daily.csv
-- <DATA_PATH>/features/tsla_features.parquet (Features + target)
-- <DATA_PATH>/features/tsla_features.csv
-
-Requirements (pip):
-- alpaca-py, pandas, numpy, pyyaml, pyarrow
+Outputs pro Symbol:
+    <DATA_PATH>/raw/<symbol>_30min.parquet
+    <DATA_PATH>/raw/<symbol>_30min.csv
+    <DATA_PATH>/features/<symbol>_features_30min.parquet
+    <DATA_PATH>/features/<symbol>_features_30min.csv
 """
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.data.enums import Adjustment
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import yaml
-import os
+import yaml, os
 
-# ---------- Helper: simple technical indicators ----------
+# ---------- Helper functions ----------
 def sma(series: pd.Series, window: int) -> pd.Series:
     return series.rolling(window, min_periods=window).mean()
 
@@ -56,10 +49,10 @@ API_KEY = keys["KEYS"]["APCA-API-KEY-ID-Data"]
 SECRET_KEY = keys["KEYS"]["APCA-API-SECRET-KEY-Data"]
 
 params = yaml.safe_load(open("../../conf/params.yaml"))
-DATA_PATH   = params["DATA_ACQUISITION"]["DATA_PATH"]      # z.B. "../../data"
+DATA_PATH   = params["DATA_ACQUISITION"]["DATA_PATH"]
 START_DATE  = datetime.strptime(params["DATA_ACQUISITION"]["START_DATE"], "%Y-%m-%d")
 END_DATE    = datetime.strptime(params["DATA_ACQUISITION"]["END_DATE"], "%Y-%m-%d")
-SYMBOL      = params["DATA_ACQUISITION"].get("SYMBOL", "TSLA")
+SYMBOLS     = params["DATA_ACQUISITION"].get("SYMBOLS", ["TSLA"])
 
 # ---------- Prepare output dirs ----------
 raw_dir = os.path.join(DATA_PATH, "raw")
@@ -67,90 +60,69 @@ feat_dir = os.path.join(DATA_PATH, "features")
 os.makedirs(raw_dir, exist_ok=True)
 os.makedirs(feat_dir, exist_ok=True)
 
-# ---------- Init client ----------
+# ---------- Init Alpaca client ----------
 client = StockHistoricalDataClient(api_key=API_KEY, secret_key=SECRET_KEY)
 
-# ---------- Request daily bars ----------
-print(f"Fetching Daily bars for {SYMBOL} from {START_DATE.date()} to {END_DATE.date()}...")
-req = StockBarsRequest(
-    symbol_or_symbols=SYMBOL,
-    timeframe=TimeFrame.Day,
-    adjustment=Adjustment.ALL,   # Splits/Dividenden adjustiert
-    start=START_DATE,
-    end=END_DATE
-)
+# ---------- Loop über alle Symbole ----------
+for symbol in SYMBOLS   :
+    print(f"\nFetching 30-MINUTE bars for {symbol} from {START_DATE.date()} to {END_DATE.date()}...")
 
-bars = client.get_stock_bars(req)
-df = bars.df.reset_index()
+    # Hier der entscheidende Unterschied:
+    # TimeFrame(unit=TimeFrameUnit.Minute, amount=30) liefert 30-Minuten-Balken
+    req = StockBarsRequest(
+        symbol_or_symbols=symbol,
+        timeframe=TimeFrame(amount=30, unit=TimeFrameUnit.Minute),  # 👈 30-Minuten-Auflösung
+        adjustment=Adjustment.ALL,
+        start=START_DATE,
+        end=END_DATE
+    )
 
-# Wenn Multi-Symbol-Index vorhanden, 'symbol' entfernen
-if "symbol" in df.columns:
-    df = df.drop(columns=["symbol"])
+    bars = client.get_stock_bars(req)
+    df = bars.df.reset_index()
 
-# Einheitliche Spaltennamen
-df = df.rename(columns={
-    "timestamp": "date",
-    "open": "open",
-    "high": "high",
-    "low": "low",
-    "close": "close",
-    "volume": "volume",
-    "trade_count": "trade_count",
-    "vwap": "vwap"
-})
+    if "symbol" in df.columns:
+        df = df.drop(columns=["symbol"])
 
-# Sortierung & Datentypen
-df = df.sort_values("date").reset_index(drop=True)
-df["date"] = pd.to_datetime(df["date"])
+    df = df.rename(columns={
+        "timestamp": "datetime",
+        "open": "open",
+        "high": "high",
+        "low": "low",
+        "close": "close",
+        "volume": "volume",
+        "trade_count": "trade_count",
+        "vwap": "vwap"
+    })
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df = df.sort_values("datetime").reset_index(drop=True)
 
-# ---------- Save RAW ----------
-raw_parquet = os.path.join(raw_dir, "tsla_daily.parquet")
-raw_csv     = os.path.join(raw_dir, "tsla_daily.csv")
-df.to_parquet(raw_parquet, index=False)
-df.to_csv(raw_csv, index=False)
-print(f"Saved RAW to:\n  {raw_parquet}\n  {raw_csv}")
+    # ---------- Save RAW ----------
+    raw_parquet = os.path.join(raw_dir, f"{symbol.lower()}_30min.parquet")
+    raw_csv     = os.path.join(raw_dir, f"{symbol.lower()}_30min.csv")
+    df.to_parquet(raw_parquet, index=False)
+    df.to_csv(raw_csv, index=False)
+    print(f"Saved RAW → {raw_parquet}")
 
-# ---------- Feature Engineering ----------
-feat = df.copy()
+    # ---------- Feature Engineering ----------
+    feat = df.copy()
+    feat["close_pct_change"] = feat["close"].pct_change()
+    feat["sma_5"]  = sma(feat["close"], 5)
+    feat["sma_10"] = sma(feat["close"], 10)
+    feat["ema_5"]  = ema(feat["close"], 5)
+    feat["ema_10"] = ema(feat["close"], 10)
+    feat["rsi_14"] = rsi(feat["close"], 14)
 
-# Prozentuale Veränderung Close (heute vs. gestern)
-feat["close_pct_change"] = feat["close"].pct_change()
+    # Target: nächste 30-Minuten-Periode
+    feat["close_next"] = feat["close"].shift(-1)
+    feat["target"] = (feat["close_next"] > feat["close"]).astype("Int64")
+    feat = feat.dropna(subset=["target"]).reset_index(drop=True)
 
-# Trendindikatoren
-feat["sma_5"]  = sma(feat["close"], 5)
-feat["sma_10"] = sma(feat["close"], 10)
-feat["ema_5"]  = ema(feat["close"], 5)
-feat["ema_10"] = ema(feat["close"], 10)
+    # ---------- Save FEATURES ----------
+    feat_parquet = os.path.join(feat_dir, f"{symbol.lower()}_features_30min.parquet")
+    feat_csv     = os.path.join(feat_dir, f"{symbol.lower()}_features_30min.csv")
+    feat.to_parquet(feat_parquet, index=False)
+    feat.to_csv(feat_csv, index=False)
+    print(f"Saved FEATURES → {feat_parquet}")
+    print(f"{symbol}: {len(feat)} rows")
 
-# Momentum
-feat["rsi_14"] = rsi(feat["close"], 14)
-
-# Target: steigt der nächste Schlusskurs?
-feat["close_next"] = feat["close"].shift(-1)
-feat["target"] = (feat["close_next"] > feat["close"]).astype("Int64")
-
-# Letzte Zeile hat kein next Close -> entfernen
-feat = feat.dropna(subset=["target"]).reset_index(drop=True)
-
-# Auswahl & Reihenfolge
-cols = [
-    "date", "open", "high", "low", "close", "volume",
-    "close_pct_change", "sma_5", "sma_10", "ema_5", "ema_10", "rsi_14",
-    "target"
-]
-feat = feat[cols]
-
-# ---------- Save FEATURES ----------
-feat_parquet = os.path.join(feat_dir, "tsla_features.parquet")
-feat_csv     = os.path.join(feat_dir, "tsla_features.csv")
-feat.to_parquet(feat_parquet, index=False)
-feat.to_csv(feat_csv, index=False)
-print(f"Saved FEATURES to:\n  {feat_parquet}\n  {feat_csv}")
-
-# ---------- Quick preview ----------
-print("\nRAW head():")
-print(df.head(3))
-print("\nFEATURES head():")
-print(feat.head(3))
-print("\nLabel balance (target):")
-print(feat["target"].value_counts(dropna=False))
+print("\n✅ DONE: Alle Symbole (30-Minuten) verarbeitet.")
