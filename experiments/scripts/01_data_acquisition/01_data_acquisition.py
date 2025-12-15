@@ -33,6 +33,8 @@ import numpy as np
 from datetime import datetime
 import yaml
 import os
+from pathlib import Path
+
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 analyzer = SentimentIntensityAnalyzer()
@@ -58,11 +60,13 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
 
 
 # -------------------- Load configs --------------------
-keys = yaml.safe_load(open("../../conf/keys.yaml"))
+BASE_DIR = Path(__file__).resolve().parents[2]  # experiments/scripts/01_data_acquisition
+CONF_DIR = BASE_DIR / "conf"
+keys = yaml.safe_load(open(CONF_DIR / "keys.yaml"))
 API_KEY = keys["KEYS"]["APCA-API-KEY-ID-Data"]
 SECRET_KEY = keys["KEYS"]["APCA-API-SECRET-KEY-Data"]
 
-params = yaml.safe_load(open("../../conf/params.yaml"))
+params = yaml.safe_load(open(CONF_DIR / "params.yaml"))
 DATA_PATH   = params["DATA_ACQUISITION"]["DATA_PATH"]
 START_DATE  = datetime.strptime(params["DATA_ACQUISITION"]["START_DATE"], "%Y-%m-%d")
 END_DATE    = datetime.strptime(params["DATA_ACQUISITION"]["END_DATE"], "%Y-%m-%d")
