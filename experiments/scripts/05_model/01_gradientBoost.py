@@ -128,11 +128,32 @@ print("\nClassification Report (Validation, LogReg):\n",
 print("\n===== GRADIENT BOOSTING MODEL =====\n")
 
 param_grid = [
-    {"n_estimators": 100, "learning_rate": 0.1, "max_depth": 2},
-    {"n_estimators": 200, "learning_rate": 0.1, "max_depth": 2},
-    {"n_estimators": 200, "learning_rate": 0.05, "max_depth": 3},
-    {"n_estimators": 300, "learning_rate": 0.05, "max_depth": 3},
+    {
+        "n_estimators": 80,
+        "learning_rate": 0.05,
+        "max_depth": 2,
+        "subsample": 0.7,
+        "min_samples_leaf": 50,
+        "min_samples_split": 100,
+    },
+    {
+        "n_estimators": 120,
+        "learning_rate": 0.03,
+        "max_depth": 2,
+        "subsample": 0.7,
+        "min_samples_leaf": 100,
+        "min_samples_split": 200,
+    },
+    {
+        "n_estimators": 150,
+        "learning_rate": 0.03,
+        "max_depth": 3,
+        "subsample": 0.6,
+        "min_samples_leaf": 150,
+        "min_samples_split": 300,
+    },
 ]
+
 
 best_model = None
 best_val_acc = -1
@@ -142,10 +163,8 @@ for params in param_grid:
     print(f"Testing params: {params}")
 
     gb = GradientBoostingClassifier(
-        n_estimators=params["n_estimators"],
-        learning_rate=params["learning_rate"],
-        max_depth=params["max_depth"],
         random_state=42,
+        **params
     )
 
     gb.fit(X_train, y_train)

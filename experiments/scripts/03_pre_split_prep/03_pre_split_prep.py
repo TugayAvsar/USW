@@ -39,9 +39,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
+
 
 # ---------------- Config laden ----------------
-params = yaml.safe_load(open("../../conf/params.yaml"))
+BASE_DIR = Path(__file__).resolve().parents[2]  # experiments/scripts/01_data_acquisition
+CONF_DIR = BASE_DIR / "conf"
+
+params = yaml.safe_load(open(CONF_DIR / "params.yaml"))
 DATA_PATH = params["DATA_ACQUISITION"]["DATA_PATH"]
 SYMBOLS = params["DATA_ACQUISITION"].get("SYMBOLS", ["TSLA", "F", "GM"])
 
@@ -121,21 +126,37 @@ for sym in SYMBOLS:
 # ---------------- Features: Tesla erweitern ----------------
 df = tsla.copy()
 
-# 1) Return-Feature: falls bereits vorhanden (close_pct_change), können wir es nutzen
+# 1) Returns
 if "close_pct_change" in df.columns:
     df["return"] = df["close_pct_change"]
 else:
     df["return"] = df["close"].pct_change()
 
-# 2) Zusätzliche technische Features (falls in 01 noch nicht berechnet)
+# 2) Trend & Momentum
 df["ema_5"] = ema(df["close"], 5)
 df["ema_10"] = ema(df["close"], 10)
+df["ema_diff"] = df["ema_5"] - df["ema_10"]
+df["ema_diff_change"] = df["ema_diff"].diff()
+
 df["rsi_14"] = rsi(df["close"], 14)
+df["rsi_change"] = df["rsi_14"].diff()
+
+# 3) Volatilität
+df["vol_6"] = df["return"].rolling(6).std()
+df["vol_12"] = df["return"].rolling(12).std()
+df["vol_ratio"] = df["vol_6"] / df["vol_12"]
+
+# 4) Preisbeschleunigung
+df["return_acc"] = df["return"].diff()
+
+# 5) Volumen & VWAP
 df["vwap_diff"] = (df["close"] - df["vwap"]) / df["vwap"]
 df["volume_change"] = df["volume"].pct_change()
 
-# News-Features aus 01 bleiben AUTOMATISCH erhalten:
-#   news_count, avg_headline_len, avg_summary_len, avg_sentiment (falls vorhanden)
+# 6) News-Dynamik (falls vorhanden)
+if "avg_sentiment" in df.columns:
+    df["news_sentiment_change"] = df["avg_sentiment"].diff()
+    df["news_active"] = (df["news_count"] > 0).astype(int)
 
 
 # ---------------- Cross-Stock-Features (F & GM) ----------------

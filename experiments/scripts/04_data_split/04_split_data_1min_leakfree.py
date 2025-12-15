@@ -50,8 +50,9 @@ print("Spalten:", df.columns.tolist())
 # 2) Zeitbasierter Split
 # (gleiche Cutoffs wie 30-min, damit vergleichbar)
 # -----------------------
-TRAIN_END = pd.Timestamp("2024-12-31", tz="UTC")
-VAL_END   = pd.Timestamp("2025-06-30",  tz="UTC")
+TRAIN_END = pd.Timestamp("2023-12-31", tz="UTC")
+VAL_END   = pd.Timestamp("2024-12-31", tz="UTC")
+
 
 train_mask = df["datetime"] <= TRAIN_END
 val_mask   = (df["datetime"] > TRAIN_END) & (df["datetime"] <= VAL_END)

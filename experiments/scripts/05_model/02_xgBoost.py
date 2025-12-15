@@ -98,10 +98,35 @@ print("Saved baseline confusion matrix →", baseline_cm_path)
 # -------------------------------------------------------
 # Tipp: Damit es nicht ewig dauert, bleib bei moderaten n_estimators.
 param_grid = [
-    {"n_estimators": 200, "max_depth": 3, "learning_rate": 0.10, "subsample": 0.9},
-    {"n_estimators": 300, "max_depth": 4, "learning_rate": 0.05, "subsample": 0.9},
-    {"n_estimators": 400, "max_depth": 3, "learning_rate": 0.03, "subsample": 0.8},
+    {
+        "n_estimators": 120,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "subsample": 0.7,
+        "colsample_bytree": 0.7,
+        "min_child_weight": 10,
+        "gamma": 1.0,
+    },
+    {
+        "n_estimators": 150,
+        "max_depth": 2,
+        "learning_rate": 0.03,
+        "subsample": 0.7,
+        "colsample_bytree": 0.6,
+        "min_child_weight": 20,
+        "gamma": 2.0,
+    },
+    {
+        "n_estimators": 200,
+        "max_depth": 3,
+        "learning_rate": 0.03,
+        "subsample": 0.6,
+        "colsample_bytree": 0.6,
+        "min_child_weight": 20,
+        "gamma": 2.0,
+    },
 ]
+
 
 best_model = None
 best_val_auc = -1
@@ -113,15 +138,11 @@ for params in param_grid:
     print(f"\nTesting params: {params}")
 
     xgb = XGBClassifier(
-        n_estimators=params["n_estimators"],
-        max_depth=params["max_depth"],
-        learning_rate=params["learning_rate"],
-        subsample=params["subsample"],
-        colsample_bytree=0.9,
         objective="binary:logistic",
-        eval_metric="logloss",  # kompatibel: AUC berechnen wir manuell
+        eval_metric="logloss",
         random_state=42,
-        n_jobs=-1
+        n_jobs=-1,
+        **params
     )
 
     xgb.fit(X_train, y_train)
