@@ -36,6 +36,13 @@ EXP_DIR  = os.path.abspath(os.path.join(BASE_DIR, "..",".."))
 CONF_DIR   = os.path.join(EXP_DIR, "conf")
 MODEL_DIR  = os.path.join(EXP_DIR, "models")
 
+FEATURE_FILE = os.path.join(MODEL_DIR, "xgb_features_1min.txt")
+
+with open(FEATURE_FILE) as f:
+    FEATURES = [line.strip() for line in f.readlines()]
+
+print(f"[init] Loaded {len(FEATURES)} features for XGBoost")
+
 SYMBOL = "TSLA"
 QTY = 1
 

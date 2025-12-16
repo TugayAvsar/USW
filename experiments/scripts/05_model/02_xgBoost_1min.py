@@ -55,6 +55,18 @@ test_df  = pd.read_parquet(TEST_FILE)
 TARGET = "target"
 FEATURES = [c for c in train_df.columns if c not in ["datetime", TARGET]]
 
+# -------------------------------------------------------
+# Feature-Liste für Deployment speichern
+# -------------------------------------------------------
+FEATURE_FILE = os.path.join(MODEL_DIR, "xgb_features_1min.txt")
+
+with open(FEATURE_FILE, "w") as f:
+    for col in FEATURES:
+        f.write(col + "\n")
+
+print(f"Saved feature list → {FEATURE_FILE}")
+
+
 # NaNs -> median train
 median_values = train_df[FEATURES].median(numeric_only=True)
 train_df[FEATURES] = train_df[FEATURES].fillna(median_values)
