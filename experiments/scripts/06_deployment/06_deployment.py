@@ -31,7 +31,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 # CONFIG
 # =====================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-EXP_DIR  = os.path.abspath(os.path.join(BASE_DIR, ".."))
+EXP_DIR  = os.path.abspath(os.path.join(BASE_DIR, "..",".."))
 
 CONF_DIR   = os.path.join(EXP_DIR, "conf")
 MODEL_DIR  = os.path.join(EXP_DIR, "models")
