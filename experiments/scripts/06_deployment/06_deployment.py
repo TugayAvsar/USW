@@ -49,8 +49,8 @@ HOLD_MINUTES   = 30          # Exit nach 30 Minuten
 with open(os.path.join(CONF_DIR, "keys.yaml")) as f:
     keys = yaml.safe_load(f)
 
-API_KEY    = keys["KEYS"]["APCA-API-KEY-ID-Paper"]
-API_SECRET = keys["KEYS"]["APCA-API-SECRET-KEY-Paper"]
+API_KEY    = keys["KEYS"]["APCA-API-KEY-ID-Data"]
+API_SECRET = keys["KEYS"]["APCA-API-SECRET-KEY-Data"]
 
 # =====================================================
 # CLIENTS
