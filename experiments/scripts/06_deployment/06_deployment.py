@@ -11,7 +11,6 @@ Run as one-shot (z. B. alle 5 Minuten via cron oder tmux-loop).
 """
 
 import os
-import time
 from datetime import datetime, timedelta, timezone
 
 import joblib
@@ -28,13 +27,13 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 
 
 # =====================================================
-# CONFIG
+# PATHS & CONFIG
 # =====================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-EXP_DIR  = os.path.abspath(os.path.join(BASE_DIR, "..",".."))
+EXP_DIR  = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
 
-CONF_DIR   = os.path.join(EXP_DIR, "conf")
-MODEL_DIR  = os.path.join(EXP_DIR, "models")
+CONF_DIR  = os.path.join(EXP_DIR, "conf")
+MODEL_DIR = os.path.join(EXP_DIR, "models")
 
 FEATURE_FILE = os.path.join(MODEL_DIR, "xgb_features_1min.txt")
 
@@ -46,8 +45,8 @@ print(f"[init] Loaded {len(FEATURES)} features for XGBoost")
 SYMBOL = "TSLA"
 QTY = 1
 
-PROB_THRESHOLD = 0.55        # Entry-Schwelle
-HOLD_MINUTES   = 30          # Exit nach 30 Minuten
+PROB_THRESHOLD = 0.55
+HOLD_MINUTES = 30
 
 
 # =====================================================
@@ -59,10 +58,11 @@ with open(os.path.join(CONF_DIR, "keys.yaml")) as f:
 API_KEY    = keys["KEYS"]["APCA-API-KEY-ID-Data"]
 API_SECRET = keys["KEYS"]["APCA-API-SECRET-KEY-Data"]
 
+
 # =====================================================
 # CLIENTS
 # =====================================================
-data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
+data_client  = StockHistoricalDataClient(API_KEY, API_SECRET)
 trade_client = TradingClient(API_KEY, API_SECRET, paper=True)
 
 
@@ -101,9 +101,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =====================================================
-# GET LATEST DATA
+# DATA FETCH
 # =====================================================
-def get_latest_data():
+def get_latest_data() -> pd.DataFrame:
     req = StockBarsRequest(
         symbol_or_symbols=SYMBOL,
         timeframe=TimeFrame.Minute,
@@ -117,23 +117,29 @@ def get_latest_data():
 
 
 # =====================================================
-# ENTRY DECISION
+# ENTRY LOGIC
 # =====================================================
-def check_entry():
-    df = get_latest_data()
-    df_feat = build_features(df)
+def check_entry(latest_row: pd.Series) -> bool:
+    # 1) Alle Features initialisieren (wichtig!)
+    row = {f: 0.0 for f in FEATURES}
 
-    X = df_feat.iloc[-1:][[
+    # 2) Live verfügbare Features setzen
+    for col in [
         "return",
         "ema_5",
         "ema_10",
         "rsi_14",
-        "volume_change",
         "vwap_diff",
-    ]]
+        "volume_change",
+    ]:
+        if col in latest_row:
+            row[col] = float(latest_row[col])
+
+    # 3) Korrekte Feature-Reihenfolge erzwingen
+    X = pd.DataFrame([row])[FEATURES].values
 
     prob = model.predict_proba(X)[0, 1]
-    print(f"[{datetime.utcnow()}] P(up) = {prob:.3f}")
+    print(f"[model] P(up) = {prob:.3f}")
 
     return prob > PROB_THRESHOLD
 
@@ -146,9 +152,13 @@ def close_old_positions():
     now = datetime.now(timezone.utc)
 
     for pos in positions:
-        filled_at = datetime.fromisoformat(pos.exchange_opened_at.replace("Z", "+00:00"))
-        if now - filled_at > timedelta(minutes=HOLD_MINUTES):
-            print(f"Closing position {pos.symbol}")
+        opened_at = datetime.fromisoformat(
+            pos.exchange_opened_at.replace("Z", "+00:00")
+        )
+
+        if now - opened_at > timedelta(minutes=HOLD_MINUTES):
+            print(f"[exit] Closing position {pos.symbol}")
+
             order = MarketOrderRequest(
                 symbol=pos.symbol,
                 qty=abs(int(float(pos.qty))),
@@ -164,8 +174,18 @@ def close_old_positions():
 def main():
     print("=== XGBoost Paper Trading Bot (1-Min) ===")
 
-    if check_entry():
-        print("BUY signal detected")
+    raw_df = get_latest_data()
+    feat_df = build_features(raw_df)
+
+    if feat_df.empty:
+        print("[WARN] Not enough data for features")
+        return
+
+    latest_row = feat_df.iloc[-1]
+
+    if check_entry(latest_row):
+        print("✅ BUY signal detected")
+
         order = MarketOrderRequest(
             symbol=SYMBOL,
             qty=QTY,
@@ -174,7 +194,7 @@ def main():
         )
         trade_client.submit_order(order)
     else:
-        print("No entry signal")
+        print("❌ No entry signal")
 
     close_old_positions()
 
