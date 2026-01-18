@@ -191,6 +191,26 @@ XGBoost                 test        0.517063  0.518340
                         train       0.539152  0.666667
                         val         0.529230  0.509828
 ```
+## Switch to 1-Minute Granularity
+
+Based on the backtesting results and the feedback, we switched the live deployment from  
+**30-minute bars to 1-minute bars**.
+
+Motivation:
+
+- The model’s target is inherently *short-term*
+- A 30-minute horizon is too coarse for intraday trading
+- Live signals become more reactive and meaningful at higher frequency
+- The time-based exit (HOLD = 5 minutes) aligns naturally with a 1-minute resolution
+
+The switch improves:
+
+- temporal consistency between data, model and trading logic
+- responsiveness of the bot
+- interpretability of trades in an intraday context
+
+It also ensures that the deployment reflects the *actual prediction task*  
+rather than applying a coarse-grained model to a fine-grained trading problem.
 ---
 
 ## Step 6 – Deployment (Paper Trading Bot)
@@ -319,7 +339,7 @@ The strategy works **when the model receives consistent features**.
 
 ---
 
-## Key Comparison (for the presentation)
+## Key Comparison
 
 | Backtest Type       | Result       | Statement                               |
 |---------------------|--------------|-----------------------------------------|
