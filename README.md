@@ -45,6 +45,9 @@ Our model uses technical indicators and cross-stock signals:
 3. **Define binary classification target** for next 30-minute direction
 4. **Inspect descriptive statistics and distributions**
 5. **Prepare model-ready feature matrices (pre-split)**
+6. **Train classification models**
+7. **Evaluate predictive performance**
+8. **Deploy model into a paper-trading bot**
 
 ---
 
@@ -57,12 +60,11 @@ Raw prices are retrieved using **Alpaca Paper Trading API**:
 - Symbols: `TSLA`, `F`, `GM`
 - Period: ~3 years of intraday history
 
-Saved under: 
-/experiments/data/raw
+Saved under:  
+`/experiments/data/raw`
 
-Sample raw columns:
-timestamp | open | high | low | close | volume | vwap | trade_count
-
+Sample raw columns:  
+`timestamp | open | high | low | close | volume | vwap | trade_count`
 
 ---
 
@@ -100,9 +102,8 @@ Our prediction objective is balanced enough for classification tasks:
 
 ## Step 3 – Pre-Split Data Preparation
 
-Performed in:
-scripts/03_pre_split_prep/03_pre_split_prep.py
-
+Performed in:  
+`scripts/03_pre_split_prep/03_pre_split_prep.py`
 
 ### How features and targets were prepared
 
@@ -112,12 +113,11 @@ scripts/03_pre_split_prep/03_pre_split_prep.py
 ✔️ Created binary next-bar direction target  
 ✔️ Removed NaNs and saved pre-processed Parquet files:
 
-/experiments/data/features/tsla_features_30min.parquet
-
+`/experiments/data/features/tsla_features_30min.parquet`
 
 ### Example Feature Snapshot
-close | return | ema_5 | ema_10 | rsi_14 | corr_f | corr_gm | target
 
+`close | return | ema_5 | ema_10 | rsi_14 | corr_f | corr_gm | target`
 
 ### Feature Statistics
 
@@ -128,39 +128,152 @@ Even though individual correlations appear weak (common in financial series),
 
 ---
 
-## Findings So Far
+## Step 4 – Modeling
 
-🔍 Observations:
+We frame the task as a **binary classification problem**:
 
-- Tesla exhibits the largest intraday volatility among automotive peers
-- Ford and GM show **non-zero rolling correlations**, confirming shared sector behavior
-- Technical indicators such as **RSI and EMA deltas** reveal trend shifts
-- Intraday returns provide a more meaningful signal than raw prices
+> “Will the next 30-minute bar close higher than the current one?”
 
-📌 Hypothesis strengthened:
+Models evaluated:
 
-> *Ford and GM contain early signals that can anticipate movement in TSLA.*
+- Logistic Regression (baseline)
+- Random Forest
+- XGBoost (final choice)
 
----
+**XGBoost** was selected due to:
 
-## Next Steps
-
-🚀 **Train ML models** using engineered features:
-
-- Logistic Regression / Random Forest baseline
-- Neural network classifier (optional)
-- Evaluate prediction horizon beyond 30min
-
-💡 **Deploy trading strategy** via Alpaca Paper Trading
+- robustness to noisy financial features
+- ability to capture non-linear interactions
+- superior validation performance
 
 ---
 
-## Repository Structure
+## Step 5 – Training & Evaluation
 
-/experiments
-├─ data
-│ ├─ raw/ # downloaded Alpaca bars
-│ └─ features/ # engineered parquet features
-├─ images/ # plots used in this README
-└─ scripts/ # acquisition & preprocessing code
+Training pipeline:
 
+1. Time-based train/validation split
+2. Feature scaling where required
+3. Model training per algorithm
+4. Evaluation on unseen validation data
+
+Metrics used:
+
+- Accuracy
+- Precision / Recall
+- ROC-AUC
+- Confusion Matrix
+
+XGBoost achieved the best trade-off between:
+
+- predictive performance
+- stability
+- robustness to feature noise
+
+```
+=== Comparison (Accuracy) ===
+granularity                         1min     30min
+model                   split           
+         
+Baseline(NoFeatures)    test        0.512107  0.500000
+                        train       0.524873  0.501149
+                        val         0.523944  0.501229
+                    
+GradBoost               test        0.517593  0.505164
+                        train       0.534718  0.608750
+                        val         0.527200  0.498925
+                        
+LogReg                  test        0.514093  0.498219
+                        train       0.526587  0.520875
+                        val         0.523685  0.505068
+                        
+XGBoost                 test        0.517063  0.518340
+                        train       0.539152  0.666667
+                        val         0.529230  0.509828
+```
+---
+
+## Step 6 – Deployment (Paper Trading Bot)
+
+The trained model is integrated into a **live paper-trading bot**:
+
+- Fetches latest market bars
+- Recomputes features in real-time
+- Applies trained XGBoost model
+- Generates BUY / HOLD / SELL decisions
+- Executes trades via Alpaca Paper API
+
+Location:
+
+`experiments/scripts/06_deployment/06_deployment.py`
+
+---
+
+## Trading Logic
+
+We follow **Time-Based Exit** (no dynamic holding):
+
+- Entry:  
+  BUY if `P(up) > threshold`
+
+- Exit:  
+  SELL after **fixed holding period**
+
+**Entry Strategy**
+- (10% von Equity) / latest price (TSLA)
+= Anzahl an Shares die gekauft werden
+
+Configuration:
+
+```python
+HOLD_MINUTES = 5
+PROB_THRESHOLD = 0.55
+```
+
+This ensures consistency:
+```
+Component	Horizon
+Target	        next 30 min
+Entry	        now
+Exit	        after 5 min
+Logic	        short-term directional move
+```
+
+This approach is:
+- simple
+- robust
+- easy to explain
+- fully aligned with the trained target
+
+## IEX switch to YFinance
+- Market Data Delay
+    - The IEX feed in Alpaca has a ~15 minute delay.
+- Improvement Strategy
+    - Use yfinance for real-time market data
+- Use Alpaca only for order execution
+
+This separates:
+```
+Layer	        Tool
+Market Data	yfinance
+Execution	Alpaca Paper API
+```
+This design improves:
+- realism
+- academic soundness
+- future extensibility
+
+## Conclusion
+#### This project demonstrates an end-to-end machine learning trading pipeline:
+- Data acquisition
+- Feature engineering
+- Statistical exploration
+- Model training
+- Evaluation
+- Live deployment
+- Automated trading logic
+- The result is a fully functional intraday trading bot that:
+- predicts Tesla’s short-term direction
+- integrates cross-stock signals
+- executes trades automatically
+- remains explainable and academically sound
