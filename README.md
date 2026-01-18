@@ -263,6 +263,77 @@ This design improves:
 - academic soundness
 - future extensibility
 
+---
+
+## Backtesting & Strategy Validation
+
+### 🧪 Backtest 1: Live / Raw Backtest
+*(yfinance + Alpaca, freshly computed features)*
+
+#### 🎯 Objective
+Verify whether the **live bot actually executes trades** using current market data.
+
+#### ✅ Result
+- **0 trades**
+- Model probability:  
+  *almost constant at ≈ 0.33*
+- Entry condition `P(up) > 0.55` was **never met**
+
+#### 🔍 Interpretation
+- No error in the trading logic
+- Root cause:
+    - `trade_count` in live data is always `0`
+    - The live feature pipeline differs from the training pipeline
+    - The model receives **unsuitable inputs** → no actionable signals
+
+👉 **In short:**  
+This backtest shows that *the current live deployment is data-limited*.
+
+---
+
+### 🧪 Backtest 2: Processed-Feature Backtest
+*(training / validation data with identical feature pipeline)*
+
+#### 🎯 Objective
+Evaluate the **trading strategy (entry + exit)** under **correct model conditions**.
+
+#### ✅ Result (for `P(up) > 0.55`)
+
+| HOLD (min) | Trades | Win rate |
+|------------|--------|----------|
+| 1          | 1751   | ~42 %    |
+| 5          | 1429   | ~44 %    |
+| 10         | 1257   | ~44 %    |
+
+#### 🔍 Interpretation
+- Longer holding periods:
+    - fewer trades
+    - higher win rate
+- **HOLD = 5 minutes**:
+    - good compromise
+    - less overtrading
+    - more stable results
+
+👉 **In short:**  
+The strategy works **when the model receives consistent features**.
+
+---
+
+## Key Comparison (for the presentation)
+
+| Backtest Type       | Result       | Statement                               |
+|---------------------|--------------|-----------------------------------------|
+| Raw / Live-like     | 0 trades     | Data pipeline issue                     |
+| Processed Features  | Many trades  | Strategy & model are functional         |
+
+---
+
+## Backtesting Conclusion
+
+> *“The first backtest served to validate the live deployment and revealed data-driven limitations.  
+> The second backtest on processed features confirms the functionality of the model and demonstrates  
+> that a holding time of five minutes is a reasonable choice.”*
+
 ## Conclusion
 #### This project demonstrates an end-to-end machine learning trading pipeline:
 - Data acquisition
