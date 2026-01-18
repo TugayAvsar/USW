@@ -208,8 +208,7 @@ The switch improves:
 - temporal consistency between data, model and trading logic
 - responsiveness of the bot
 - interpretability of trades in an intraday context
-
-It also ensures that the deployment reflects the *actual prediction task*  
+- It also ensures that the deployment reflects the *actual prediction task*  
 rather than applying a coarse-grained model to a fine-grained trading problem.
 ---
 
